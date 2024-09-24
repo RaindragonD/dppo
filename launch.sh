@@ -1,4 +1,4 @@
-python script/run.py --config-name=eval_diffusion_unet_img --config-dir=cfg/robomimic/eval/square
+python script/run.py --config-name=eval_diffusion_mlp --config-dir=cfg/robomimic/eval/square
 
 python script/run.py --config-name=pre_diffusion_unet_img --config-dir=cfg/robomimic/pretrain/square
 

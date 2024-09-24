@@ -7,9 +7,9 @@ _target_: agent.eval.eval_diffusion_agent.EvalDiffusionAgent
 
 name: ${env_name}_eval_diffusion_mlp_ta${horizon_steps}_td${denoising_steps}
 logdir: ${oc.env:DPPO_LOG_DIR}/robomimic-eval/${name}/${now:%Y-%m-%d}_${now:%H-%M-%S}_${seed}
-base_policy_path: ${oc.env:DPPO_LOG_DIR}/robomimic-pretrain/square/square_pre_diffusion_mlp_img_ta4_td100/2024-09-23_10-55-26_42/checkpoint/state_3500.pt  # use 8000 for comparing policy parameterizations
+base_policy_path: /home/yl/dppo/log/robomimic-pretrain/square_pre_diffusion_mlp_ta8_td20/2024-09-24_16-26-38_42/checkpoint/state_5000.pt  # use 8000 for comparing policy parameterizations
 robomimic_env_cfg_path: cfg/robomimic/env_meta/${env_name}.json
-normalization_path: ${oc.env:DPPO_DATA_DIR}/robomimic/${env_name}/normalization.npz
+normalization_path: ${oc.env:DPPO_DATA_DIR}/robomimic/${env_name}-ph/normalization.npz
 
 seed: 42
 device: cuda:0
@@ -18,15 +18,15 @@ obs_dim: 23
 action_dim: 7
 transition_dim: ${action_dim}
 denoising_steps: 20
-cond_steps: 1
-horizon_steps: 4
-act_steps: 4
+cond_steps: 2
+horizon_steps: 8
+act_steps: 8
 
 n_steps: 300  # each episode takes max_episode_steps / act_steps steps
 render_num: 0
 
 env:
-  n_envs: 50
+  n_envs: 10
   name: ${env_name}
   best_reward_threshold_for_success: 1
   max_episode_steps: 300
@@ -53,8 +53,9 @@ model:
   network_path: ${base_policy_path}
   network:
     _target_: model.diffusion.mlp_diffusion.DiffusionMLP
-    time_dim: 16
-    mlp_dims: [512, 512, 512]
+    time_dim: 32
+    mlp_dims: [1024, 1024, 1024]
+    cond_mlp_dims: [512, 64]
     residual_style: True
     cond_dim: ${eval:'${obs_dim} * ${cond_steps}'}
     horizon_steps: ${horizon_steps}
