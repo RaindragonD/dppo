@@ -79,6 +79,7 @@ robomimic dataset normalizes action to [-1, 1], observation roughly? to [-1, 1].
 import numpy as np
 from tqdm import tqdm
 import pickle
+import cv2
 
 try:
     import h5py  # not included in pyproject.toml
@@ -186,9 +187,9 @@ def make_dataset(
                 ]
             )
             combined_img_shape = (
-                img_shapes[0][0],
-                img_shapes[0][1],
                 sum([img_shape[2] for img_shape in img_shapes]),
+                96,
+                96,
             )
             logging.info(f"Image shapes: {img_shapes}")
 
@@ -200,21 +201,20 @@ def make_dataset(
         # do over all indices
         out_train = {}
         keys = [
-            "observations",
+            "states",
             "actions",
             "rewards",
         ]
         if args.cameras is not None:
             keys.append("images")
-        out_train["observations"] = np.empty((0, max_traj_length, obs_dim))
-        out_train["actions"] = np.empty((0, max_traj_length, action_dim))
-        out_train["rewards"] = np.empty((0, max_traj_length))
-        out_train["traj_length"] = []
+        out_train["states"] = np.empty((0, obs_dim))
+        out_train["actions"] = np.empty((0, action_dim))
+        out_train["rewards"] = np.empty((0))
+        out_train["traj_lengths"] = []
         if args.cameras is not None:
             out_train["images"] = np.empty(
                 (
                     0,
-                    max_traj_length,
                     *combined_img_shape,
                 ),
                 dtype=np.uint8,
@@ -231,7 +231,7 @@ def make_dataset(
 
             # get episode length
             traj_length = f[f"data/{ep}"].attrs["num_samples"]
-            out["traj_length"].append(traj_length)
+            out["traj_lengths"].append(traj_length)
             # print("Episode:", i, "Trajectory length:", traj_length)
 
             # extract
@@ -256,52 +256,31 @@ def make_dataset(
                 actions = raw_actions
 
             data_traj = {
-                "observations": obs,
+                "states": obs,
                 "actions": actions,
                 "rewards": rewards,
             }
             if args.cameras is not None:  # no normalization
-                data_traj["images"] = np.concatenate(
-                    (
-                        [
-                            f["data/{}/obs/{}".format(ep, img_name)][()]
-                            for img_name in img_names
-                        ]
-                    ),
-                    axis=-1,
-                )
+                # assume single camera now
+                images = f["data/{}/obs/{}".format(ep, img_names[0])][()]
+                images = np.stack([cv2.resize(img, (96,96)) for img in images])
+                images = np.transpose(images, (0, 3, 1, 2))
+                data_traj["images"] = images
 
             # apply padding to make all episodes have the same max steps
             # later when we load this dataset, we will use the traj_length to slice the data
             for key in keys:
                 traj = data_traj[key]
-                if traj.ndim == 1:
-                    pad_width = (0, max_traj_length - len(traj))
-                elif traj.ndim == 2:
-                    pad_width = ((0, max_traj_length - traj.shape[0]), (0, 0))
-                elif traj.ndim == 4:
-                    pad_width = (
-                        (0, max_traj_length - traj.shape[0]),
-                        (0, 0),
-                        (0, 0),
-                        (0, 0),
-                    )
-                else:
-                    raise ValueError("Unsupported dimension")
-                traj = np.pad(
-                    traj,
-                    pad_width,
-                    mode="constant",
-                    constant_values=0,
-                )
-                out[key] = np.vstack((out[key], traj[None]))
+                out[key] = np.concatenate((out[key], traj))
 
             # check reward
             if i in train_indices:
                 train_episode_reward_all.append(np.sum(data_traj["rewards"]))
             else:
                 val_episode_reward_all.append(np.sum(data_traj["rewards"]))
-
+    out_train["traj_lengths"] = np.array(out_train["traj_lengths"])
+    out_val["traj_lengths"] = np.array(out_val["traj_lengths"])
+    
     # Save to np file
     save_train_path = os.path.join(save_dir, save_name_prefix + "train.npz")
     save_val_path = os.path.join(save_dir, save_name_prefix + "val.npz")
@@ -324,48 +303,48 @@ def make_dataset(
     # debug
     logging.info("\n========== Final ===========")
     logging.info(
-        f"Train - Number of episodes and transitions: {len(out_train['traj_length'])}, {np.sum(out_train['traj_length'])}"
+        f"Train - Number of episodes and transitions: {len(out_train['traj_lengths'])}, {np.sum(out_train['traj_lengths'])}"
     )
     logging.info(
-        f"Val - Number of episodes and transitions: {len(out_val['traj_length'])}, {np.sum(out_val['traj_length'])}"
+        f"Val - Number of episodes and transitions: {len(out_val['traj_lengths'])}, {np.sum(out_val['traj_lengths'])}"
     )
     logging.info(
-        f"Train - Mean/Std trajectory length: {np.mean(out_train['traj_length'])}, {np.std(out_train['traj_length'])}"
+        f"Train - Mean/Std trajectory length: {np.mean(out_train['traj_lengths'])}, {np.std(out_train['traj_lengths'])}"
     )
     logging.info(
-        f"Train - Max/Min trajectory length: {np.max(out_train['traj_length'])}, {np.min(out_train['traj_length'])}"
+        f"Train - Max/Min trajectory length: {np.max(out_train['traj_lengths'])}, {np.min(out_train['traj_lengths'])}"
     )
     logging.info(
         f"Train - Mean/Std episode reward: {np.mean(train_episode_reward_all)},  {np.std(train_episode_reward_all)}"
     )
     if val_split > 0:
         logging.info(
-            f"Val - Mean/Std trajectory length: {np.mean(out_val['traj_length'])}, {np.std(out_val['traj_length'])}"
+            f"Val - Mean/Std trajectory length: {np.mean(out_val['traj_lengths'])}, {np.std(out_val['traj_lengths'])}"
         )
         logging.info(
-            f"Val - Max/Min trajectory length: {np.max(out_val['traj_length'])}, {np.min(out_val['traj_length'])}"
+            f"Val - Max/Min trajectory length: {np.max(out_val['traj_lengths'])}, {np.min(out_val['traj_lengths'])}"
         )
         logging.info(
             f"Val - Mean/Std episode reward: {np.mean(val_episode_reward_all)},  {np.std(val_episode_reward_all)}"
         )
     for obs_dim_ind in range(obs_dim):
-        obs = out_train["observations"][:, :, obs_dim_ind]
+        obs = out_train["states"][:, obs_dim_ind]
         logging.info(
             f"Train - Obs dim {obs_dim_ind+1} mean {np.mean(obs)} std {np.std(obs)} min {np.min(obs)} max {np.max(obs)}"
         )
     for action_dim_ind in range(action_dim):
-        action = out_train["actions"][:, :, action_dim_ind]
+        action = out_train["actions"][:, action_dim_ind]
         logging.info(
             f"Train - Action dim {action_dim_ind+1} mean {np.mean(action)} std {np.std(action)} min {np.min(action)} max {np.max(action)}"
         )
     if val_split > 0:
         for obs_dim_ind in range(obs_dim):
-            obs = out_val["observations"][:, :, obs_dim_ind]
+            obs = out_val["states"][:, obs_dim_ind]
             logging.info(
                 f"Val - Obs dim {obs_dim_ind+1} mean {np.mean(obs)} std {np.std(obs)} min {np.min(obs)} max {np.max(obs)}"
             )
         for action_dim_ind in range(action_dim):
-            action = out_val["actions"][:, :, action_dim_ind]
+            action = out_val["actions"][:, action_dim_ind]
             logging.info(
                 f"Val - Action dim {action_dim_ind+1} mean {np.mean(action)} std {np.std(action)} min {np.min(action)} max {np.max(action)}"
             )
@@ -386,7 +365,7 @@ if __name__ == "__main__":
     parser.add_argument("--load_path", type=str, default=".")
     parser.add_argument("--save_dir", type=str, default=".")
     parser.add_argument("--save_name_prefix", type=str, default="")
-    parser.add_argument("--val_split", type=float, default="0.2")
+    parser.add_argument("--val_split", type=float, default="0")
     parser.add_argument("--max_episodes", type=int, default="-1")
     parser.add_argument("--normalize", action="store_true")
     parser.add_argument("--cameras", nargs="*", default=None)

@@ -10,6 +10,7 @@ import torch.nn as nn
 import einops
 from einops.layers.torch import Rearrange
 import logging
+from model.common.modules import SpatialEmb, RandomShiftsAug
 
 log = logging.getLogger(__name__)
 
@@ -323,3 +324,101 @@ class Unet1D(nn.Module):
 
         x = einops.rearrange(x, "b t h -> b h t")
         return x
+
+class VisionUnetDiffusion(Unet1D):
+    def __init__(
+        self,
+        backbone,
+        transition_dim,
+        cond_dim,
+        img_cond_steps=1,
+        visual_feature_dim=128,
+        spatial_emb=0,
+        dropout=0,
+        num_img=1,
+        augment=False,
+        **unet_kwargs
+    ):
+        # Call the parent Unet1D constructor with modified cond_dim
+        super().__init__(transition_dim, cond_dim=cond_dim + visual_feature_dim, **unet_kwargs)
+
+        # Vision-related attributes
+        self.backbone = backbone
+        self.augment = augment
+        if augment:
+            self.aug = RandomShiftsAug(pad=4)
+        self.num_img = num_img
+        self.img_cond_steps = img_cond_steps
+
+        if spatial_emb > 0:
+            assert spatial_emb > 1, "spatial_emb should be greater than 1"
+            self.compress = SpatialEmb(
+                num_patch=self.backbone.num_patch,
+                patch_dim=self.backbone.patch_repr_dim,
+                prop_dim=cond_dim,
+                proj_dim=spatial_emb,
+                dropout=dropout,
+            )
+            self.visual_feature_dim = spatial_emb * num_img
+        else:
+            self.compress = nn.Sequential(
+                nn.Linear(self.backbone.repr_dim, visual_feature_dim),
+                nn.LayerNorm(visual_feature_dim),
+                nn.Dropout(dropout),
+                nn.ReLU(),
+            )
+            self.visual_feature_dim = visual_feature_dim
+
+    def process_images(self, rgb, state):
+        B, T_rgb, C, H, W = rgb.shape
+
+        # Take recent images
+        rgb = rgb[:, -self.img_cond_steps:]
+
+        # Concatenate images in cond by channels
+        if self.num_img > 1:
+            rgb = rgb.reshape(B, T_rgb, self.num_img, 3, H, W)
+            rgb = einops.rearrange(rgb, "b t n c h w -> b n (t c) h w")
+        else:
+            rgb = einops.rearrange(rgb, "b t c h w -> b (t c) h w")
+
+        # Convert rgb to float32 for augmentation
+        rgb = rgb.float()
+
+        # Apply augmentation if enabled
+        if self.augment:
+            rgb = self.aug(rgb)
+
+        # Get backbone output
+        feat = self.backbone(rgb)
+
+        # Compress features
+        if isinstance(self.compress, SpatialEmb):
+            feat = self.compress(feat, state)
+        else:
+            feat = feat.flatten(1, -1)
+            feat = self.compress(feat)
+
+        return feat
+
+    def forward(self, x, time, cond, **kwargs):
+        """
+        x: (B, Ta, Da)
+        time: (B,) or int, diffusion step
+        cond: dict with key state/rgb; more recent obs at the end
+            state: (B, To, Do)
+            rgb: (B, To, C, H, W)
+        """
+        B = len(x)
+
+        # Process state condition
+        state = cond["state"].view(B, -1)
+
+        # Process image condition
+        visual_feat = self.process_images(cond["rgb"], state)
+
+        # Combine state and visual features
+        combined_cond = torch.cat([state, visual_feat], dim=-1)
+
+        # Call the parent Unet1D forward method with the combined condition
+        return super().forward(x, time, {"state": combined_cond}, **kwargs)

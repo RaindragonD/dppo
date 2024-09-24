@@ -145,12 +145,14 @@ class PreTrainAgent:
 
     def save_model(self):
         """
-        saves model and ema to disk;
+        saves model, ema, optimizer, and scheduler to disk;
         """
         data = {
             "epoch": self.epoch,
             "model": self.model.state_dict(),
             "ema": self.ema_model.state_dict(),
+            "optimizer": self.optimizer.state_dict(),
+            "scheduler": self.lr_scheduler.state_dict(),
         }
         savepath = os.path.join(self.checkpoint_dir, f"state_{self.epoch}.pt")
         torch.save(data, savepath)
@@ -158,7 +160,7 @@ class PreTrainAgent:
 
     def load(self, epoch):
         """
-        loads model and ema from disk
+        loads model, ema, optimizer, and scheduler from disk
         """
         loadpath = os.path.join(self.checkpoint_dir, f"state_{epoch}.pt")
         data = torch.load(loadpath, weights_only=True)
@@ -166,3 +168,5 @@ class PreTrainAgent:
         self.epoch = data["epoch"]
         self.model.load_state_dict(data["model"])
         self.ema_model.load_state_dict(data["ema"])
+        self.optimizer.load_state_dict(data["optimizer"])
+        self.lr_scheduler.load_state_dict(data["scheduler"])

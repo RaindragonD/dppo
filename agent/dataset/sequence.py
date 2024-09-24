@@ -52,7 +52,7 @@ class StitchedSequenceDataset(torch.utils.data.Dataset):
 
         # Load dataset to device specified
         if dataset_path.endswith(".npz"):
-            dataset = np.load(dataset_path, allow_pickle=False)  # only np arrays
+            dataset = np.load(dataset_path, allow_pickle=True)  # only np arrays
         elif dataset_path.endswith(".pkl"):
             with open(dataset_path, "rb") as f:
                 dataset = pickle.load(f)
