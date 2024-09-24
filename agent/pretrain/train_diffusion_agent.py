@@ -10,12 +10,20 @@ import numpy as np
 log = logging.getLogger(__name__)
 from util.timer import Timer
 from agent.pretrain.train_agent import PreTrainAgent, batch_to_device
+from agent.eval.eval_diffusion_agent import EvalDiffusionAgent
 
+import torch
 
 class TrainDiffusionAgent(PreTrainAgent):
 
     def __init__(self, cfg):
         super().__init__(cfg)
+        self.sample_freq = cfg.train.get("sample_freq", 10)
+        self.eval_freq = cfg.train.get("eval_freq", 50)
+        
+        # build eval agent
+        self.eval_agent = EvalDiffusionAgent(cfg, load_model=False)
+        self.eval_agent.model = self.model
 
     def run(self):
 
@@ -60,7 +68,18 @@ class TrainDiffusionAgent(PreTrainAgent):
             # save model
             if self.epoch % self.save_model_freq == 0 or self.epoch == self.n_epochs:
                 self.save_model()
-
+            
+            # sample actions
+            if self.epoch % self.sample_freq == 0:
+                self.model.eval()
+                with torch.no_grad():
+                    for batch_train in self.dataloader_train:
+                        gt_action, cond = batch_train
+                        pred_action = self.model(cond=cond).trajectories
+                        mse = torch.nn.functional.mse_loss(pred_action, gt_action)
+                        wandb.log({"train - mse": mse,}, step=self.epoch)
+                self.model.train()
+                
             # log loss
             if self.epoch % self.log_freq == 0:
                 log.info(
@@ -71,13 +90,14 @@ class TrainDiffusionAgent(PreTrainAgent):
                         wandb.log(
                             {"loss - val": loss_val}, step=self.epoch, commit=False
                         )
-                    wandb.log(
-                        {
-                            "loss - train": loss_train,
-                        },
-                        step=self.epoch,
-                        commit=True,
-                    )
-
+                    wandb.log({"loss - train": loss_train}, step=self.epoch)
+                    
+            # eval
+            if self.epoch % self.eval_freq == 0:
+                self.model.eval()
+                success_rate = self.eval_agent.run()
+                wandb.log({"eval - success rate": success_rate,}, step=self.epoch)
+                self.model.train()
+                
             # count
             self.epoch += 1

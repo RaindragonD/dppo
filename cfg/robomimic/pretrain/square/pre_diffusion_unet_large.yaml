@@ -67,9 +67,9 @@ model:
   denoised_clip_value: 1.0
   network:
     _target_: model.diffusion.unet.Unet1D
-    diffusion_step_embed_dim: 16
-    dim: 64
-    dim_mults: [1, 2]
+    diffusion_step_embed_dim: 128
+    dim: 512
+    dim_mults: [1, 2, 4]
     kernel_size: 5
     n_groups: 8
     smaller_encoder: False

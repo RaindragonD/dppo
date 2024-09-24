@@ -11,12 +11,12 @@ import logging
 log = logging.getLogger(__name__)
 from util.timer import Timer
 from agent.eval.eval_agent import EvalAgent
-
+from tqdm import tqdm
 
 class EvalDiffusionAgent(EvalAgent):
 
-    def __init__(self, cfg):
-        super().__init__(cfg)
+    def __init__(self, cfg, load_model=True):
+        super().__init__(cfg, load_model)
 
     def run(self):
 
@@ -28,7 +28,7 @@ class EvalDiffusionAgent(EvalAgent):
         if self.render_video:
             for env_ind in range(self.n_render):
                 options_venv[env_ind]["video_path"] = os.path.join(
-                    self.render_dir, f"itr-{self.itr}_trial-{env_ind}.mp4"
+                    self.render_dir, f"trial-{env_ind}.mp4"
                 )
 
         # Reset env before iteration starts
@@ -39,9 +39,7 @@ class EvalDiffusionAgent(EvalAgent):
         reward_trajs = np.empty((0, self.n_envs))
 
         # Collect a set of trajectories from env
-        for step in range(self.n_steps):
-            if step % 10 == 0:
-                print(f"Processed step {step} of {self.n_steps}")
+        for step in tqdm(range(self.n_steps)):
 
             # Select action
             with torch.no_grad():
@@ -117,3 +115,4 @@ class EvalDiffusionAgent(EvalAgent):
             eval_best_reward=avg_best_reward,
             time=time,
         )
+        return success_rate

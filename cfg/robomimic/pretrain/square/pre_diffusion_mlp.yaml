@@ -5,24 +5,48 @@ hydra:
     dir: ${logdir}
 _target_: agent.pretrain.train_diffusion_agent.TrainDiffusionAgent
 
-name: ${env}_pre_diffusion_mlp_ta${horizon_steps}_td${denoising_steps}
+name: ${env_name}_pre_diffusion_mlp_ta${horizon_steps}_td${denoising_steps}
 logdir: ${oc.env:DPPO_LOG_DIR}/robomimic-pretrain/${name}/${now:%Y-%m-%d}_${now:%H-%M-%S}_${seed}
-train_dataset_path: ${oc.env:DPPO_DATA_DIR}/robomimic/${env}/train.npz
+train_dataset_path: ${oc.env:DPPO_DATA_DIR}/robomimic/${env_name}-ph/train.npz
+normalization_path: ${oc.env:DPPO_DATA_DIR}/robomimic/${env_name}-ph/normalization.npz
+robomimic_env_cfg_path: cfg/robomimic/env_meta/${env_name}.json
 
 seed: 42
 device: cuda:0
-env: square
+env_name: square
 obs_dim: 23
 action_dim: 7
 transition_dim: ${action_dim}
 denoising_steps: 20
-horizon_steps: 4
-cond_steps: 1
+horizon_steps: 8
+act_steps: 8
+cond_steps: 2
+n_steps: 300
+render_num: 0
 
 wandb:
   entity: ${oc.env:DPPO_WANDB_ENTITY}
-  project: robomimic-${env}-pretrain
+  project: robomimic-${env_name}-pretrain
   run: ${now:%H-%M-%S}_${name}
+
+env:
+  n_envs: 10
+  name: ${env_name}
+  best_reward_threshold_for_success: 1
+  max_episode_steps: ${n_steps}
+  save_video: False
+  wrappers:
+    robomimic_lowdim:
+      normalization_path: ${normalization_path}
+      low_dim_keys: ['robot0_eef_pos',
+                    'robot0_eef_quat',
+                    'robot0_gripper_qpos',
+                    'object'] # same order of preprocessed observations
+    multi_step:
+      n_obs_steps: ${cond_steps}
+      n_action_steps: ${act_steps}
+      max_episode_steps: ${env.max_episode_steps}
+      reset_within_step: True
 
 train:
   n_epochs: 8000

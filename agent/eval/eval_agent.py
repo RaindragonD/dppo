@@ -16,7 +16,7 @@ from env.gym_utils import make_async
 
 class EvalAgent:
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, load_model=True):
         super().__init__()
         self.cfg = cfg
         self.device = cfg.device
@@ -64,7 +64,8 @@ class EvalAgent:
         )  # furniture specific, for best reward calculation
 
         # Build model and load checkpoint
-        self.model = hydra.utils.instantiate(cfg.model)
+        if load_model:
+            self.model = hydra.utils.instantiate(cfg.model)
 
         # Eval params
         self.n_steps = cfg.n_steps
