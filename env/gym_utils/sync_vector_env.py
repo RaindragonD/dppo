@@ -199,3 +199,31 @@ class SyncVectorEnv(VectorEnv):
 
         else:
             return True
+
+    def reset_arg(self, options_list=None):
+        """Reset all environments with different options for each environment.
+
+        Parameters
+        ----------
+        options_list : list of dict, optional
+            A list of reset options for each environment. If None, default options will be used.
+
+        Returns
+        -------
+        observations : element of :attr:`observation_space`
+            A batch of observations from the vectorized environment.
+        """
+        if options_list is None:
+            options_list = [None] * self.num_envs
+        
+        self._dones[:] = False
+        observations = []
+        for env, options in zip(self.envs, options_list):
+            observation = env.reset(options=options)
+            observations.append(observation)
+
+        self.observations = concatenate(
+            self.single_observation_space, observations, self.observations
+        )
+
+        return deepcopy(self.observations) if self.copy else self.observations
