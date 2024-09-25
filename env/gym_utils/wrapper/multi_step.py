@@ -11,7 +11,8 @@ from typing import Optional
 from gym import spaces
 import numpy as np
 from collections import defaultdict, deque
-
+from pathlib import Path
+import copy
 
 def stack_repeated(x, n):
     return np.repeat(np.expand_dims(x, axis=0), n, axis=0)
@@ -106,6 +107,7 @@ class MultiStep(gym.Wrapper):
         self.reset_within_step = reset_within_step
         self.pass_full_observations = pass_full_observations
         self.verbose = verbose
+        self.base_video_path = None
 
     def reset(
         self,
@@ -114,6 +116,16 @@ class MultiStep(gym.Wrapper):
         options: dict = {},
     ):
         """Resets the environment."""
+        if "video_path" in options and \
+            (self.base_video_path is None or options["video_path"] != self.base_video_path):
+            self.base_video_path = Path(options["video_path"])
+            self.reset_idx = 0
+        if self.base_video_path is not None:
+            options = copy.deepcopy(options)
+            options["video_path"] = self.base_video_path.with_name(
+                f"{self.base_video_path.stem}_reset-{self.reset_idx}.mp4"
+            )
+            self.reset_idx += 1
         obs = self.env.reset(
             seed=seed,
             options=options,
