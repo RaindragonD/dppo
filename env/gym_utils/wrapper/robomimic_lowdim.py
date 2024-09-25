@@ -66,7 +66,7 @@ class RobomimicLowdimWrapper(gym.Env):
             low=low,
             high=high,
             shape=low.shape,
-            dtype=np.float32, # np.float64 will cause wierd bugs in eval for async envs
+            dtype=np.float32, # NOTE: np.float64 will cause wierd bugs in eval for async envs
         )
 
     def normalize_obs(self, obs):
