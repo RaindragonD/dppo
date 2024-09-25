@@ -56,7 +56,7 @@ class TrainPPODiffusionAgent(TrainPPOAgent):
 
             # Prepare video paths for each envs --- only applies for the first set of episodes if allowing reset within iteration and each iteration has multiple episodes from one env
             options_venv = [{} for _ in range(self.n_envs)]
-            if self.itr % self.render_freq == 0 and self.render_video:
+            if self.itr % self.render_freq == 0:
                 for env_ind in range(self.n_render):
                     options_venv[env_ind]["video_path"] = os.path.join(
                         self.render_dir, f"itr-{self.itr}_trial-{env_ind}.mp4"
@@ -160,17 +160,18 @@ class TrainPPODiffusionAgent(TrainPPOAgent):
                 episode_reward = np.array(
                     [np.sum(reward_traj) for reward_traj in reward_trajs_split]
                 )
-                if (
-                    self.furniture_sparse_reward
-                ):  # only for furniture tasks, where reward only occurs in one env step
-                    episode_best_reward = episode_reward
-                else:
-                    episode_best_reward = np.array(
-                        [
-                            np.max(reward_traj) / self.act_steps
-                            for reward_traj in reward_trajs_split
-                        ]
-                    )
+                episode_best_reward = episode_reward # NOTE: using robomimic only now, sparse reward, reset upon finish
+                # if (
+                #     self.furniture_sparse_reward
+                # ):  # only for furniture tasks, where reward only occurs in one env step
+                #     episode_best_reward = episode_reward
+                # else:
+                #     episode_best_reward = np.array(
+                #         [
+                #             np.max(reward_traj) / self.act_steps
+                #             for reward_traj in reward_trajs_split
+                #         ]
+                #     )
                 avg_episode_reward = np.mean(episode_reward)
                 avg_best_reward = np.mean(episode_best_reward)
                 success_rate = np.mean(

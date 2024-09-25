@@ -28,7 +28,6 @@ env:
   name: ${env_name}
   best_reward_threshold_for_success: 1
   max_episode_steps: 400
-  save_video: false
   wrappers:
     robomimic_lowdim:
       normalization_path: ${normalization_path}
@@ -68,7 +67,7 @@ train:
   val_freq: 10
   render:
     freq: 1
-    num: 0
+    num: 5
   # PPO specific
   reward_scale_running: True
   reward_scale_const: 1.0

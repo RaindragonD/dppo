@@ -40,7 +40,7 @@ class TrainAgent:
         # Make vectorized env
         self.env_name = cfg.env.name
         env_type = cfg.env.get("env_type", None)
-        render_offscreen = cfg.render_num > 0
+        render_offscreen = cfg.train.render.num > 0
         self.venv = make_async(
             cfg.env.name,
             env_type=env_type,
