@@ -7,7 +7,8 @@ _target_: agent.eval.eval_diffusion_agent.EvalDiffusionAgent
 
 name: ${env_name}_eval_diffusion_mlp_ta${horizon_steps}_td${denoising_steps}
 logdir: ${oc.env:DPPO_LOG_DIR}/robomimic-eval/${name}/${now:%Y-%m-%d}_${now:%H-%M-%S}_${seed}
-base_policy_path: /home/yl/dppo/log/robomimic-pretrain/square_pre_diffusion_mlp_ta8_td20/2024-09-24_22-12-28_42/checkpoint/state_8000.pt
+# base_policy_path: /home/yl/dppo/log/robomimic-pretrain/square_pre_diffusion_mlp_ta8_td20/2024-09-24_22-12-28_42/checkpoint/state_8000.pt
+base_policy_path: /home/yl/dppo/log/robomimic-finetune/square_ft_diffusion_mlp_ta8_td20_tdf10/2024-09-25_01-12-28_42/checkpoint/state_100.pt
 robomimic_env_cfg_path: cfg/robomimic/env_meta/${env_name}.json
 normalization_path: ${oc.env:DPPO_DATA_DIR}/robomimic/${env_name}-ph/normalization.npz
 
@@ -22,7 +23,7 @@ cond_steps: 2
 horizon_steps: 8
 act_steps: 8
 
-n_steps: 300  # each episode takes max_episode_steps / act_steps steps
+n_steps: 100  # each episode takes max_episode_steps / act_steps steps
 render_num: 20
 
 env:

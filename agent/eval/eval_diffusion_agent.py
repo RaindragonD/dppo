@@ -77,17 +77,18 @@ class EvalDiffusionAgent(EvalAgent):
             episode_reward = np.array(
                 [np.sum(reward_traj) for reward_traj in reward_trajs_split]
             )
-            if (
-                self.furniture_sparse_reward
-            ):  # only for furniture tasks, where reward only occurs in one env step
-                episode_best_reward = episode_reward
-            else:
-                episode_best_reward = np.array(
-                    [
-                        np.max(reward_traj) / self.act_steps
-                        for reward_traj in reward_trajs_split
-                    ]
-                )
+            episode_best_reward = episode_reward # NOTE: using robomimic only now, sparse reward, reset upon finish
+            # if (
+            #     self.furniture_sparse_reward
+            # ):  # only for furniture tasks, where reward only occurs in one env step
+            #     episode_best_reward = episode_reward
+            # else:
+            #     episode_best_reward = np.array(
+            #         [
+            #             np.max(reward_traj) / self.act_steps
+            #             for reward_traj in reward_trajs_split
+            #         ]
+            #     )
             avg_episode_reward = np.mean(episode_reward)
             avg_best_reward = np.mean(episode_best_reward)
             success_rate = np.mean(

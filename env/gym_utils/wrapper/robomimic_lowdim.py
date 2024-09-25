@@ -135,6 +135,7 @@ class RobomimicLowdimWrapper(gym.Env):
             video_img = self.render(mode="rgb_array")
             self.video_writer.append_data(video_img)
 
+        done = reward == 1.0 or done
         return obs, reward, done, info
 
     def render(self, mode="rgb_array"):
