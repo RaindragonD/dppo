@@ -46,7 +46,7 @@ class TrainPPOImgDiffusionAgent(TrainPPODiffusionAgent):
 
             # Prepare video paths for each envs --- only applies for the first set of episodes if allowing reset within iteration and each iteration has multiple episodes from one env
             options_venv = [{} for _ in range(self.n_envs)]
-            if self.itr % self.render_freq == 0 and self.render_video:
+            if self.itr % self.render_freq == 0:
                 for env_ind in range(self.n_render):
                     options_venv[env_ind]["video_path"] = os.path.join(
                         self.render_dir, f"itr-{self.itr}_trial-{env_ind}.mp4"

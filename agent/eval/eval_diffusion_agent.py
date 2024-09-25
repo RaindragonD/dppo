@@ -25,11 +25,10 @@ class EvalDiffusionAgent(EvalAgent):
 
         # Prepare video paths for each envs --- only applies for the first set of episodes if allowing reset within iteration and each iteration has multiple episodes from one env
         options_venv = [{} for _ in range(self.n_envs)]
-        if self.render_video:
-            for env_ind in range(self.n_render):
-                options_venv[env_ind]["video_path"] = os.path.join(
-                    self.render_dir, f"trial-{env_ind}.mp4"
-                )
+        for env_ind in range(self.n_render):
+            options_venv[env_ind]["video_path"] = os.path.join(
+                self.render_dir, f"trial-{env_ind}.mp4"
+            )
 
         # Reset env before iteration starts
         self.model.eval()

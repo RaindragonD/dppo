@@ -40,6 +40,7 @@ class TrainAgent:
         # Make vectorized env
         self.env_name = cfg.env.name
         env_type = cfg.env.get("env_type", None)
+        render_offscreen = cfg.render_num > 0
         self.venv = make_async(
             cfg.env.name,
             env_type=env_type,
@@ -51,7 +52,7 @@ class TrainAgent:
             shape_meta=cfg.get("shape_meta", None),
             use_image_obs=cfg.env.get("use_image_obs", False),
             render=cfg.env.get("render", False),
-            render_offscreen=cfg.env.get("save_video", False),
+            render_offscreen=render_offscreen,
             obs_dim=cfg.obs_dim,
             action_dim=cfg.action_dim,
             **cfg.env.specific if "specific" in cfg.env else {},
@@ -106,12 +107,7 @@ class TrainAgent:
         self.log_freq = cfg.train.get("log_freq", 1)
         self.save_model_freq = cfg.train.save_model_freq
         self.render_freq = cfg.train.render.freq
-        self.n_render = cfg.train.render.num
-        self.render_video = cfg.env.get("save_video", False)
-        assert self.n_render <= self.n_envs, "n_render must be <= n_envs"
-        assert not (
-            self.n_render <= 0 and self.render_video
-        ), "Need to set n_render > 0 if saving video"
+        self.n_render = min(cfg.train.render.num, self.n_envs)
         self.traj_plotter = (
             hydra.utils.instantiate(cfg.train.plotter)
             if "plotter" in cfg.train

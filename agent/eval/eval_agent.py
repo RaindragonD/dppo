@@ -28,6 +28,7 @@ class EvalAgent:
         # Make vectorized env
         self.env_name = cfg.env.name
         env_type = cfg.env.get("env_type", None)
+        render_offscreen = cfg.render_num > 0
         self.venv = make_async(
             cfg.env.name,
             env_type=env_type,
@@ -39,7 +40,7 @@ class EvalAgent:
             shape_meta=cfg.get("shape_meta", None),
             use_image_obs=cfg.env.get("use_image_obs", False),
             render=cfg.env.get("render", False),
-            render_offscreen=cfg.env.get("save_video", False),
+            render_offscreen=render_offscreen,
             obs_dim=cfg.obs_dim,
             action_dim=cfg.action_dim,
             **cfg.env.specific if "specific" in cfg.env else {},
@@ -81,11 +82,7 @@ class EvalAgent:
         self.result_path = os.path.join(self.logdir, "result.npz")
         os.makedirs(self.render_dir, exist_ok=True)
         self.n_render = cfg.render_num
-        self.render_video = cfg.env.get("save_video", False)
-        assert self.n_render <= self.n_envs, "n_render must be <= n_envs"
-        assert not (
-            self.n_render <= 0 and self.render_video
-        ), "Need to set n_render > 0 if saving video"
+        self.n_render = min(self.n_render, self.n_envs)
 
     def run(self):
         pass
