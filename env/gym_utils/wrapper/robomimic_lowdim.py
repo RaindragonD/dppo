@@ -30,6 +30,7 @@ class RobomimicLowdimWrapper(gym.Env):
     ):
         self.env = env
         self.init_state = init_state
+        self.has_reset_before = False
         self.render_hw = render_hw
         self.render_camera_name = render_camera_name
         self.video_writer = None
@@ -65,7 +66,7 @@ class RobomimicLowdimWrapper(gym.Env):
             low=low,
             high=high,
             shape=low.shape,
-            dtype=low.dtype,
+            dtype=np.float32, # np.float64 will cause wierd bugs in eval for async envs
         )
 
     def normalize_obs(self, obs):
@@ -108,6 +109,11 @@ class RobomimicLowdimWrapper(gym.Env):
             "seed", None
         )  # used to set all environments to specified seeds
         if self.init_state is not None:
+            if not self.has_reset_before:
+                # the env must be fully reset at least once to ensure correct rendering
+                self.env.reset()
+                self.has_reset_before = True
+
             # always reset to the same state to be compatible with gym
             raw_obs = self.env.reset_to({"states": self.init_state})
         elif new_seed is not None:

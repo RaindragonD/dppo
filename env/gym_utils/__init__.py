@@ -203,9 +203,11 @@ def make_async(
                 observation_space[key] = this_space
             env.observation_space = observation_space
         else:
-            env.observation_space = gym.spaces.Box(
-                -1, 1, shape=(obs_dim,), dtype=np.float64
-            )
+            observation_space = spaces.Dict()
+            observation_space["state"] = gym.spaces.Box(
+                -1, 1, shape=(obs_dim,), dtype=np.float32
+            ) # somehow np.float32 is very important; np.float64 will break everything
+            env.observation_space = observation_space
         env.action_space = gym.spaces.Box(-1, 1, shape=(action_dim,), dtype=np.int64)
         env.metadata = {
             "render.modes": ["human", "rgb_array", "depth_array"],
