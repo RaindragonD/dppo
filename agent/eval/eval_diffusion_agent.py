@@ -61,7 +61,7 @@ def generate_html(render_dir, n_render, episodes_start_end, reward_trajs_split):
     for env_id in range(n_render):
         if env_id in env_episodes:
             for itr, episode_index in enumerate(env_episodes[env_id]):
-                video_path = f"trial-{env_id}-{itr}.mp4"
+                video_path = f"trial-{env_id}_reset-{itr}.mp4"
                 reward_traj = reward_trajs_split[episode_index]
                 success = np.max(reward_traj) == 1
                 status_class = "success" if success else "failure"
