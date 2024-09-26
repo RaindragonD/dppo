@@ -50,6 +50,7 @@ class TrainPPODiffusionAgent(TrainPPOAgent):
         # Start training loop
         timer = Timer()
         run_results = []
+        total_env_steps = 0
         last_itr_eval = False
         done_venv = np.zeros((1, self.n_envs))
         while self.itr < self.n_train_itr:
@@ -126,6 +127,7 @@ class TrainPPODiffusionAgent(TrainPPOAgent):
                 obs_venv, reward_venv, done_venv, info_venv = self.venv.step(
                     action_venv
                 )
+                total_env_steps += self.n_envs * self.act_steps # NOTE: overestimate since env might finishes before all act_steps are done
                 if self.save_full_observations:  # state-only
                     obs_full_venv = np.array(
                         [info["full_obs"]["state"] for info in info_venv]
@@ -456,6 +458,7 @@ class TrainPPODiffusionAgent(TrainPPOAgent):
                                 "critic lr": self.critic_optimizer.param_groups[0][
                                     "lr"
                                 ],
+                                "total env steps": total_env_steps,
                             },
                             step=self.itr,
                             commit=True,
