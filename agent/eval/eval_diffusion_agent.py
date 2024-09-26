@@ -7,11 +7,89 @@ import os
 import numpy as np
 import torch
 import logging
+import html
 
 log = logging.getLogger(__name__)
 from util.timer import Timer
 from agent.eval.eval_agent import EvalAgent
 from tqdm import tqdm
+
+def generate_html(render_dir, n_render, episodes_start_end, reward_trajs_split):
+    html_content = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Evaluation Videos</title>
+        <style>
+            .video-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                gap: 20px;
+                padding: 20px;
+            }
+            .video-container {
+                border: 5px solid;
+                border-radius: 10px;
+                overflow: hidden;
+            }
+            .success { border-color: #4CAF50; }
+            .failure { border-color: #F44336; }
+            video {
+                width: 100%;
+                display: block;
+            }
+            .video-info {
+                padding: 10px;
+                text-align: center;
+                font-family: Arial, sans-serif;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="video-grid">
+    """
+
+    # Create a dictionary to store episodes for each env_id
+    env_episodes = {}
+    for i, (env_id, _, _) in enumerate(episodes_start_end):
+        if env_id not in env_episodes:
+            env_episodes[env_id] = []
+        env_episodes[env_id].append(i)
+
+    for env_id in range(n_render):
+        if env_id in env_episodes:
+            for itr, episode_index in enumerate(env_episodes[env_id]):
+                video_path = f"trial-{env_id}-{itr}.mp4"
+                reward_traj = reward_trajs_split[episode_index]
+                success = np.max(reward_traj) == 1
+                status_class = "success" if success else "failure"
+                html_content += f"""
+                    <div class="video-container {status_class}">
+                        <video controls>
+                            <source src="{html.escape(video_path)}" type="video/mp4">
+                            Your browser does not support the video tag.
+                        </video>
+                        <div class="video-info">
+                            Env ID: {env_id}, Episode: {itr}<br>
+                            Traj Length: {len(reward_traj)}<br>
+                            Max Reward: {np.max(reward_traj):.2f}
+                        </div>
+                    </div>
+                """
+
+    html_content += """
+        </div>
+    </body>
+    </html>
+    """
+
+    html_file_path = os.path.join(render_dir, "evaluation_videos.html")
+    with open(html_file_path, "w") as f:
+        f.write(html_content)
+
+    log.info(f"HTML file with video grid created at: {html_file_path}")
 
 class EvalDiffusionAgent(EvalAgent):
 
@@ -47,7 +125,7 @@ class EvalDiffusionAgent(EvalAgent):
                     .float()
                     .to(self.device)
                 }
-                samples = self.model(cond=cond)
+                samples = self.model(cond=cond, deterministic=True)
                 output_venv = (
                     samples.trajectories.cpu().numpy()
                 )  # n_env x horizon x act
@@ -115,4 +193,8 @@ class EvalDiffusionAgent(EvalAgent):
             eval_best_reward=avg_best_reward,
             time=time,
         )
+
+        # After the evaluation loop, call the generate_html function
+        generate_html(self.render_dir, self.n_render, episodes_start_end, reward_trajs_split)
+
         return success_rate

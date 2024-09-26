@@ -8,6 +8,7 @@ _target_: agent.eval.eval_diffusion_agent.EvalDiffusionAgent
 name: ${env_name}_eval_diffusion_mlp_ta${horizon_steps}_td${denoising_steps}
 logdir: ${oc.env:DPPO_LOG_DIR}/robomimic-eval/${name}/${now:%Y-%m-%d}_${now:%H-%M-%S}_${seed}
 # base_policy_path: /home/yl/dppo/log/robomimic-pretrain/square_pre_diffusion_mlp_ta8_td20/2024-09-24_22-12-28_42/checkpoint/state_8000.pt
+# base_policy_path: /home/yl/dppo/log/robomimic-finetune/square_ft_diffusion_mlp_ta8_td20_tdf10/2024-09-25_01-12-28_42/checkpoint/state_300.pt
 base_policy_path: /home/yl/dppo/log/robomimic-finetune/square_ft_diffusion_mlp_ta8_td20_tdf10/2024-09-25_05-09-13_42/checkpoint/state_200.pt
 robomimic_env_cfg_path: cfg/robomimic/env_meta/${env_name}.json
 normalization_path: ${oc.env:DPPO_DATA_DIR}/robomimic/${env_name}-ph/normalization.npz
@@ -19,6 +20,7 @@ obs_dim: 23
 action_dim: 7
 transition_dim: ${action_dim}
 denoising_steps: 20
+ft_denoising_steps: 10
 cond_steps: 2
 horizon_steps: 8
 act_steps: 8
@@ -27,7 +29,7 @@ n_steps: 100  # each episode takes max_episode_steps / act_steps steps
 render_num: 20
 
 env:
-  n_envs: 20
+  n_envs: 1
   name: ${env_name}
   best_reward_threshold_for_success: 1
   max_episode_steps: 300
@@ -45,13 +47,18 @@ env:
       reset_within_step: True
 
 model:
-  _target_: model.diffusion.diffusion.DiffusionModel
-  predict_epsilon: True
-  denoised_clip_value: 1.0
+  _target_: model.diffusion.diffusion_ppo.PPODiffusion
+  # HP to tune
+  gamma_denoising: 0.99
+  clip_ploss_coef: 0.01
+  clip_ploss_coef_base: 0.001
+  clip_ploss_coef_rate: 3
   randn_clip_value: 3
+  min_sampling_denoising_std: 0.1
+  min_logprob_denoising_std: 0.1
   #
   network_path: ${base_policy_path}
-  network:
+  actor:
     _target_: model.diffusion.mlp_diffusion.DiffusionMLP
     time_dim: 32
     mlp_dims: [1024, 1024, 1024]
@@ -60,6 +67,13 @@ model:
     cond_dim: ${eval:'${obs_dim} * ${cond_steps}'}
     horizon_steps: ${horizon_steps}
     transition_dim: ${transition_dim}
+  critic:
+    _target_: model.common.critic.CriticObs
+    cond_dim: ${eval:'${obs_dim} * ${cond_steps}'}
+    mlp_dims: [256, 256, 256]
+    activation_type: Mish
+    residual_style: True
+  ft_denoising_steps: ${ft_denoising_steps}
   horizon_steps: ${horizon_steps}
   obs_dim: ${obs_dim}
   action_dim: ${action_dim}
