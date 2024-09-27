@@ -108,14 +108,14 @@ class RobomimicLowdimWrapper(gym.Env):
         new_seed = options.get(
             "seed", None
         )  # used to set all environments to specified seeds
-        if self.init_state is not None:
+        if "init_state" in options:
             if not self.has_reset_before:
                 # the env must be fully reset at least once to ensure correct rendering
                 self.env.reset()
                 self.has_reset_before = True
 
             # always reset to the same state to be compatible with gym
-            raw_obs = self.env.reset_to({"states": self.init_state})
+            raw_obs = self.env.reset_to({"states": options["init_state"]})
         elif new_seed is not None:
             self.seed(seed=new_seed)
             raw_obs = self.env.reset()
@@ -125,10 +125,12 @@ class RobomimicLowdimWrapper(gym.Env):
         return self.get_observation(raw_obs)
 
     def step(self, action):
+        states = self.env.get_state()['states']
         if self.normalize:
             action = self.unnormalize_action(action)
         raw_obs, reward, done, info = self.env.step(action)
         obs = self.get_observation(raw_obs)
+        info['states'] = states
 
         # render if specified
         if self.video_writer is not None:

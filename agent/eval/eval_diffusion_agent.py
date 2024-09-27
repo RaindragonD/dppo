@@ -63,7 +63,7 @@ def generate_html(render_dir, n_render, episodes_start_end, reward_trajs_split):
             for itr, episode_index in enumerate(env_episodes[env_id]):
                 video_path = f"trial-{env_id}_reset-{itr}.mp4"
                 reward_traj = reward_trajs_split[episode_index]
-                success = np.max(reward_traj) == 1
+                success = np.max(reward_traj) >= 1
                 status_class = "success" if success else "failure"
                 html_content += f"""
                     <div class="video-container {status_class}">
@@ -107,6 +107,9 @@ class EvalDiffusionAgent(EvalAgent):
             options_venv[env_ind]["video_path"] = os.path.join(
                 self.render_dir, f"trial-{env_ind}.mp4"
             )
+        # init_states = np.load("log/robomimic-eval/init_states.npy")[[11,13,15,17],0]
+        # for env_ind in range(len(init_states)):
+        #     options_venv[env_ind]["init_state"] = init_states[env_ind]
 
         # Reset env before iteration starts
         self.model.eval()
@@ -133,9 +136,13 @@ class EvalDiffusionAgent(EvalAgent):
 
             # Apply multi-step action
             obs_venv, reward_venv, done_venv, info_venv = self.venv.step(action_venv)
+            if step == 0:
+                sim_states = np.array([info["states"] for info in info_venv])
             reward_trajs = np.vstack((reward_trajs, reward_venv[None]))
             firsts_trajs[step + 1] = done_venv
             prev_obs_venv = obs_venv
+        
+        np.save(os.path.join(self.logdir, "init_states"), sim_states)
 
         # Summarize episode reward --- this needs to be handled differently depending on whether the environment is reset after each iteration. Only count episodes that finish within the iteration.
         episodes_start_end = []
@@ -178,6 +185,7 @@ class EvalDiffusionAgent(EvalAgent):
             avg_episode_reward = 0
             avg_best_reward = 0
             success_rate = 0
+            reward_trajs_split = []
             log.info("[WARNING] No episode completed within the iteration!")
 
         # Log loss and save metrics
@@ -192,6 +200,7 @@ class EvalDiffusionAgent(EvalAgent):
             eval_episode_reward=avg_episode_reward,
             eval_best_reward=avg_best_reward,
             time=time,
+            reward_trajs_split=reward_trajs_split
         )
 
         # After the evaluation loop, call the generate_html function
