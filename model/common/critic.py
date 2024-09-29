@@ -5,6 +5,7 @@ Critic networks.
 
 from typing import Union
 import torch
+import torch.nn.functional as F
 import copy
 import einops
 from copy import deepcopy
@@ -58,6 +59,19 @@ class CriticObs(torch.nn.Module):
             state = cond
         q1 = self.Q1(state)
         return q1
+    
+    def loss(self, cond, reward):
+        """
+        REINFORCE loss. Not used right now.
+
+        Args:
+            cond: dict with key state; more recent obs at the end
+                state: (B, To, Do)
+            reward (to go): (B,)
+        """
+        pred = self.forward(cond).squeeze()
+        loss = F.mse_loss(pred, reward)
+        return loss
 
 
 class CriticObsAct(torch.nn.Module):

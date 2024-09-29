@@ -34,6 +34,7 @@ class VPGDiffusion(DiffusionModel):
         ft_denoising_steps_d=0,
         ft_denoising_steps_t=0,
         network_path=None,
+        critic_path=None,
         # modifying denoising schedule
         min_sampling_denoising_std=0.1,
         min_logprob_denoising_std=0.1,
@@ -89,14 +90,15 @@ class VPGDiffusion(DiffusionModel):
 
         # Value function
         self.critic = critic.to(self.device)
-        if network_path is not None:
-            checkpoint = torch.load(
-                network_path, map_location=self.device, weights_only=True
+        if critic_path is not None:
+            critic_checkpoint = torch.load(
+                critic_path, map_location=self.device, weights_only=True
             )
-            if "ema" not in checkpoint:  # load trained RL model
-                self.load_state_dict(checkpoint["model"], strict=False)
-                logging.info("Loaded critic from %s", network_path)
-
+            if "ema" in critic_checkpoint:  # load trained RL model
+                self.critic.load_state_dict(critic_checkpoint["ema"], strict=False)
+            else:
+                self.critic.load_state_dict(critic_checkpoint["model"], strict=False)
+            logging.info("Loaded critic from %s", critic_path)
     # ---------- Sampling ----------#
 
     def step(self):

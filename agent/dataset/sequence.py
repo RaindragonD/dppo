@@ -135,3 +135,72 @@ class StitchedSequenceDataset(torch.utils.data.Dataset):
 
     def __len__(self):
         return len(self.indices)
+
+class CriticDataset(torch.utils.data.Dataset):
+
+    def __init__(
+        self,
+        dataset_path,
+        cond_steps=1,
+        act_steps=1,
+        device="cuda:0",
+        max_n_episodes=10000
+    ):
+        
+        self.cond_steps = cond_steps  # states (proprio, etc.)
+        self.device = device
+
+        # Load dataset to device specified
+        if dataset_path.endswith(".npz"):
+            dataset = np.load(dataset_path, allow_pickle=True)  # only np arrays
+        elif dataset_path.endswith(".pkl"):
+            with open(dataset_path, "rb") as f:
+                dataset = pickle.load(f)
+        else:
+            raise ValueError(f"Unsupported file format: {dataset_path}")
+        traj_lengths = dataset["traj_lengths"][:max_n_episodes]  # 1-D array
+
+        self.states = torch.empty((0,)).to(self.device)
+        self.dones_trajs = torch.empty((0,)).to(self.device)
+        self.firsts_trajs = torch.empty((0,)).to(self.device)
+        cur_traj_index = 0
+        for traj_length in traj_lengths:
+            states = dataset["states"][cur_traj_index:cur_traj_index+traj_length]
+            indices = list(range(0, len(states), 8))
+            if indices[-1] != len(states) - 1:
+                indices.append(len(states) - 1)
+            states_subsampled = torch.from_numpy(states[indices]).to(self.device)
+            dones = torch.zeros((states_subsampled.shape[0])).to(self.device)
+            firsts = torch.zeros((states_subsampled.shape[0])).to(self.device)
+            firsts[0] = 1
+            dones[-1] = 1
+            
+            self.states = torch.cat((self.states, states_subsampled), dim=0).float()
+            self.dones_trajs = torch.cat((self.dones_trajs, dones), dim=0)
+            self.firsts_trajs = torch.cat((self.firsts_trajs, firsts), dim=0)
+            cur_traj_index += traj_length
+
+        self.rewards_trajs = self.dones_trajs.clone()
+        
+        log.info(f"Loaded dataset from {dataset_path}")
+        log.info(f"Number of episodes: {min(max_n_episodes, len(traj_lengths))}")
+        log.info(f"States shape/type: {self.states.shape, self.states.dtype}")
+
+    def __getitem__(self, idx):
+        
+        states = torch.stack(
+            [
+                self.states[max(idx - t, 0)]
+                for t in reversed(range(self.cond_steps))
+            ]
+        )  # more recent is at the end
+        conditions = {"state": states}
+        
+        done = self.dones_trajs[idx]
+        reward = self.rewards_trajs[idx]
+        first = self.firsts_trajs[idx]
+        
+        return conditions, reward, done, first
+
+    def __len__(self):
+        return len(self.states)
