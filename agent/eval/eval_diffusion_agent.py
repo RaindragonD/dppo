@@ -200,7 +200,6 @@ class EvalDiffusionAgent(EvalAgent):
             eval_episode_reward=avg_episode_reward,
             eval_best_reward=avg_best_reward,
             time=time,
-            reward_trajs_split=reward_trajs_split
         )
 
         # After the evaluation loop, call the generate_html function

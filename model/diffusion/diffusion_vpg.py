@@ -90,7 +90,14 @@ class VPGDiffusion(DiffusionModel):
 
         # Value function
         self.critic = critic.to(self.device)
-        if critic_path is not None:
+        if network_path is not None:
+            checkpoint = torch.load(
+                network_path, map_location=self.device, weights_only=True
+            )
+            if "ema" not in checkpoint:  # load trained RL model
+                self.load_state_dict(checkpoint["model"], strict=False)
+                logging.info("Loaded RL-trained policy from %s", network_path)
+        elif critic_path is not None:
             critic_checkpoint = torch.load(
                 critic_path, map_location=self.device, weights_only=True
             )
