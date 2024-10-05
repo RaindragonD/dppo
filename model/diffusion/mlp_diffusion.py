@@ -178,6 +178,7 @@ class DiffusionMLP(nn.Module):
         transition_dim,
         horizon_steps,
         cond_dim,
+        obs_dim,
         time_dim=16,
         mlp_dims=[256, 256],
         cond_mlp_dims=None,
@@ -185,9 +186,16 @@ class DiffusionMLP(nn.Module):
         out_activation_type="Identity",
         use_layernorm=False,
         residual_style=False,
+        predict_state=False,
     ):
         super().__init__()
-        output_dim = transition_dim * horizon_steps
+        self.predict_state = predict_state
+        self.Ta = horizon_steps
+        self.Da = transition_dim
+        if predict_state:
+            output_dim = transition_dim * horizon_steps + obs_dim
+        else:
+            output_dim = transition_dim * horizon_steps
         self.time_embedding = nn.Sequential(
             SinusoidalPosEmb(time_dim),
             nn.Linear(time_dim, time_dim * 2),
@@ -207,6 +215,8 @@ class DiffusionMLP(nn.Module):
             input_dim = time_dim + transition_dim * horizon_steps + cond_mlp_dims[-1]
         else:
             input_dim = time_dim + transition_dim * horizon_steps + cond_dim
+        if predict_state:
+            input_dim += obs_dim
         self.mlp_mean = model(
             [input_dim] + mlp_dims + [output_dim],
             activation_type=activation_type,
@@ -228,7 +238,8 @@ class DiffusionMLP(nn.Module):
         cond: dict with key state/rgb; more recent obs at the end
             state: (B, To, Do)
         """
-        B, Ta, Da = x.shape
+        # B, Ta, Da = x.shape
+        B = x.shape[0]
 
         # flatten chunk
         x = x.view(B, -1)
@@ -247,4 +258,4 @@ class DiffusionMLP(nn.Module):
 
         # mlp head
         out = self.mlp_mean(x)
-        return out.view(B, Ta, Da)
+        return out

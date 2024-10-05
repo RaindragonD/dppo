@@ -39,6 +39,7 @@ class StitchedSequenceDataset(torch.utils.data.Dataset):
         img_cond_steps=1,
         max_n_episodes=10000,
         use_img=False,
+        predict_state=False,
         device="cuda:0",
     ):
         assert (
@@ -47,6 +48,7 @@ class StitchedSequenceDataset(torch.utils.data.Dataset):
         self.horizon_steps = horizon_steps
         self.cond_steps = cond_steps  # states (proprio, etc.)
         self.img_cond_steps = img_cond_steps
+        self.predict_state = predict_state
         self.device = device
         self.use_img = use_img
 
@@ -105,7 +107,16 @@ class StitchedSequenceDataset(torch.utils.data.Dataset):
                 ]
             )
             conditions["rgb"] = images
-        batch = Batch(actions, conditions)
+
+        actions_flattened = actions.view(-1)
+        if self.predict_state:
+            # NOTE: need to guard against end of trajectory, now quick fix
+            end = min(end, len(self.states)-1)
+            end_state = self.states[end]
+            actions_state = torch.cat([actions_flattened, end_state], dim=-1)
+            batch = Batch(actions_state, conditions)
+        else:
+            batch = Batch(actions_flattened, conditions)
         return batch
 
     def make_indices(self, traj_lengths, horizon_steps):

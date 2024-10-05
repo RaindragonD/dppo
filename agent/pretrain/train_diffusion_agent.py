@@ -25,10 +25,22 @@ class TrainDiffusionAgent(PreTrainAgent):
         self.eval_agent = EvalDiffusionAgent(cfg, load_model=False)
         self.eval_agent.model = self.model
 
+    def decode_predictions(self, x):
+        action_dim = self.cfg.action_dim
+        horizon_steps = self.cfg.horizon_steps
+        B = x.shape[0]
+        if self.cfg.predict_state:
+            states = x[:, action_dim * horizon_steps:]
+            actions = x[:, :action_dim * horizon_steps].reshape(B, horizon_steps, action_dim)
+            return actions, states
+        else:
+            actions = x.reshape(B, horizon_steps, action_dim)
+            return actions, None
+        
     def run(self):
 
         timer = Timer()
-        self.epoch = 1
+        self.epoch = 0
         for _ in range(self.n_epochs):
 
             # train
@@ -74,10 +86,20 @@ class TrainDiffusionAgent(PreTrainAgent):
                 self.model.eval()
                 with torch.no_grad():
                     for batch_train in self.dataloader_train:
-                        gt_action, cond = batch_train
-                        pred_action = self.model(cond=cond).trajectories
-                        mse = torch.nn.functional.mse_loss(pred_action, gt_action)
-                        wandb.log({"train - mse": mse,}, step=self.epoch)
+                        gt, cond = batch_train
+                        pred = self.model(cond=cond).trajectories
+                        gt_actions, gt_states = self.decode_predictions(gt)
+                        pred_actions, pred_states = self.decode_predictions(pred)
+                        action_mse = torch.nn.functional.mse_loss(pred_actions, gt_actions)
+                        wandb.log({
+                            "train - action mse": action_mse,
+                        }, step=self.epoch)
+                        if self.cfg.predict_state:
+                            state_mse = torch.nn.functional.mse_loss(pred_states, gt_states)
+                            wandb.log({
+                                "train - state mse": state_mse,
+                            }, step=self.epoch)
+                        
                 self.model.train()
                 
             # log loss

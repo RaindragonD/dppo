@@ -35,6 +35,7 @@ class DiffusionModel(nn.Module):
         action_dim,
         network_path=None,
         device="cuda:0",
+        predict_state=False,
         # Various clipping
         denoised_clip_value=1.0,
         randn_clip_value=10,
@@ -54,6 +55,7 @@ class DiffusionModel(nn.Module):
         self.horizon_steps = horizon_steps
         self.obs_dim = obs_dim
         self.action_dim = action_dim
+        self.predict_state = predict_state
         self.denoising_steps = int(denoising_steps)
         self.predict_epsilon = predict_epsilon
         self.use_ddim = use_ddim
@@ -228,7 +230,7 @@ class DiffusionModel(nn.Module):
         return mu, logvar
 
     @torch.no_grad()
-    def forward(self, cond):
+    def forward(self, cond, deterministic=False):
         """
         Forward pass for sampling actions. Used in evaluating pre-trained/fine-tuned policy. Not modifying diffusion clipping
 
@@ -246,6 +248,9 @@ class DiffusionModel(nn.Module):
 
         # Loop
         x = torch.randn((B, self.horizon_steps, self.action_dim), device=device)
+        x = x.reshape(B, -1)
+        if self.predict_state:
+            x = torch.cat([x, torch.randn((B, self.obs_dim), device=device)], dim=-1)
         if self.use_ddim:
             t_all = self.ddim_t
         else:

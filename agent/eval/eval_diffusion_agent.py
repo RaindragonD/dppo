@@ -96,6 +96,18 @@ class EvalDiffusionAgent(EvalAgent):
     def __init__(self, cfg, load_model=True):
         super().__init__(cfg, load_model)
 
+    def decode_predictions(self, x):
+        action_dim = self.cfg.action_dim
+        horizon_steps = self.cfg.horizon_steps
+        B = x.shape[0]
+        if self.cfg.predict_state:
+            states = x[:, action_dim * horizon_steps:]
+            actions = x[:, :action_dim * horizon_steps].reshape(B, horizon_steps, action_dim)
+            return actions, states
+        else:
+            actions = x.reshape(B, horizon_steps, action_dim)
+            return actions, None
+        
     def run(self):
 
         # Start training loop
@@ -129,10 +141,8 @@ class EvalDiffusionAgent(EvalAgent):
                     .to(self.device)
                 }
                 samples = self.model(cond=cond, deterministic=True)
-                output_venv = (
-                    samples.trajectories.cpu().numpy()
-                )  # n_env x horizon x act
-            action_venv = output_venv[:, : self.act_steps]
+                actions, _ = self.decode_predictions(samples.trajectories.cpu().numpy())
+            action_venv = actions[:, : self.act_steps]
 
             # Apply multi-step action
             obs_venv, reward_venv, done_venv, info_venv = self.venv.step(action_venv)

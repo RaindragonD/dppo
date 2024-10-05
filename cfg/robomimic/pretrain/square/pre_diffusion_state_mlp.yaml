@@ -5,7 +5,7 @@ hydra:
     dir: ${logdir}
 _target_: agent.pretrain.train_diffusion_agent.TrainDiffusionAgent
 
-name: ${env_name}_pre_diffusion_mlp_ta${horizon_steps}_td${denoising_steps}
+name: ${env_name}_pre_diffusion_state_mlp_ta${horizon_steps}_td${denoising_steps}
 logdir: ${oc.env:DPPO_LOG_DIR}/robomimic-pretrain/${name}/${now:%Y-%m-%d}_${now:%H-%M-%S}_${seed}
 train_dataset_path: ${oc.env:DPPO_DATA_DIR}/robomimic/${env_name}-ph/train.npz
 normalization_path: ${oc.env:DPPO_DATA_DIR}/robomimic/${env_name}-ph/normalization.npz
@@ -23,7 +23,7 @@ act_steps: 8
 cond_steps: 2
 n_steps: 300
 render_num: 0
-predict_state: False
+predict_state: True
 
 wandb:
   entity: ${oc.env:DPPO_WANDB_ENTITY}
@@ -73,8 +73,8 @@ model:
     mlp_dims: [1024, 1024, 1024]
     cond_mlp_dims: [512, 64]
     residual_style: True
-    obs_dim: ${obs_dim}
     cond_dim: ${eval:'${obs_dim} * ${cond_steps}'}
+    obs_dim: ${obs_dim}
     horizon_steps: ${horizon_steps}
     transition_dim: ${transition_dim}
     predict_state: ${predict_state}
@@ -89,6 +89,7 @@ ema:
 
 train_dataset:
   _target_: agent.dataset.sequence.StitchedSequenceDataset
+  predict_state: ${predict_state}
   dataset_path: ${train_dataset_path}
   horizon_steps: ${horizon_steps}
   cond_steps: ${cond_steps}
