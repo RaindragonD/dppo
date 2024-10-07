@@ -44,6 +44,11 @@ class TrainPPODiffusionAgent(TrainPPOAgent):
                 warmup_steps=cfg.train.eta_lr_scheduler.warmup_steps,
                 gamma=1.0,
             )
+        if "intrinsic_reward" in cfg.env.wrappers:
+            self.use_intrinsic_reward = True
+            log.info("Using intrinsic reward")
+        else:
+            self.use_intrinsic_reward = False
 
     def run(self):
 
@@ -93,6 +98,9 @@ class TrainPPODiffusionAgent(TrainPPOAgent):
                 )
             )
             reward_trajs = np.empty((0, self.n_envs))
+            if self.use_intrinsic_reward:
+                intrinsics_reward_trajs = np.empty((0, self.n_envs))
+                env_reward_trajs = np.empty((0, self.n_envs))
             obs_full_trajs = np.empty((0, self.n_envs, self.obs_dim))
             obs_full_trajs = np.vstack(
                 (obs_full_trajs, prev_obs_venv["state"][:, -1][None])
@@ -127,6 +135,9 @@ class TrainPPODiffusionAgent(TrainPPOAgent):
                 obs_venv, reward_venv, done_venv, info_venv = self.venv.step(
                     action_venv
                 )
+                if self.use_intrinsic_reward:
+                    env_reward_venv = np.array([info["env_reward"][-1] for info in info_venv])
+                    intrinsics_reward_venv = np.array([info["intrinsic_reward"][-1] for info in info_venv])
                 total_env_steps += self.n_envs * self.act_steps # NOTE: overestimate since env might finishes before all act_steps are done
                 if self.save_full_observations:  # state-only
                     obs_full_venv = np.array(
@@ -140,6 +151,9 @@ class TrainPPODiffusionAgent(TrainPPOAgent):
                 )
                 chains_trajs = np.vstack((chains_trajs, chains_venv[None]))
                 reward_trajs = np.vstack((reward_trajs, reward_venv[None]))
+                if self.use_intrinsic_reward:
+                    env_reward_trajs = np.vstack((env_reward_trajs, env_reward_venv[None]))
+                    intrinsics_reward_trajs = np.vstack((intrinsics_reward_trajs, intrinsics_reward_venv[None]))
                 dones_trajs[step] = done_venv
                 firsts_trajs[step + 1] = done_venv
                 prev_obs_venv = obs_venv
@@ -153,7 +167,7 @@ class TrainPPODiffusionAgent(TrainPPOAgent):
                     end = env_steps[i + 1]
                     if end - start > 1:
                         episodes_start_end.append((env_ind, start, end - 1))
-            if len(episodes_start_end) > 0:
+            def process_reward_trajs(reward_trajs):
                 reward_trajs_split = [
                     reward_trajs[start : end + 1, env_ind]
                     for env_ind, start, end in episodes_start_end
@@ -176,6 +190,14 @@ class TrainPPODiffusionAgent(TrainPPOAgent):
                 #     )
                 avg_episode_reward = np.mean(episode_reward)
                 avg_best_reward = np.mean(episode_best_reward)
+                return episode_reward, avg_episode_reward, avg_best_reward, num_episode_finished
+
+            if len(episodes_start_end) > 0:
+                if self.use_intrinsic_reward:
+                    episode_best_reward, avg_episode_reward, avg_best_reward, num_episode_finished = process_reward_trajs(env_reward_trajs)
+                    _, avg_intrinsics_reward, _, _ = process_reward_trajs(intrinsics_reward_trajs)
+                else:
+                    episode_best_reward, avg_episode_reward, avg_best_reward, num_episode_finished = process_reward_trajs(reward_trajs)
                 success_rate = np.mean(
                     episode_best_reward >= self.best_reward_threshold_for_success
                 )
@@ -185,6 +207,7 @@ class TrainPPODiffusionAgent(TrainPPOAgent):
                 avg_episode_reward = 0
                 avg_best_reward = 0
                 success_rate = 0
+                avg_intrinsics_reward = 0
                 log.info("[WARNING] No episode completed within the iteration!")
 
             # Update models
@@ -418,23 +441,25 @@ class TrainPPODiffusionAgent(TrainPPOAgent):
             if self.itr % self.log_freq == 0:
                 time = timer()
                 if eval_mode:
-                    log.info(
-                        f"eval: success rate {success_rate:8.4f} | avg episode reward {avg_episode_reward:8.4f} | avg best reward {avg_best_reward:8.4f}"
-                    )
+                    print_str = f"eval: success rate {success_rate:8.4f} | avg episode reward {avg_episode_reward:8.4f}"
+                    if self.use_intrinsic_reward:
+                        print_str += f" | avg intrinsics reward {avg_intrinsics_reward:8.4f}"
+                    log.info(print_str)
                     if self.use_wandb:
-                        wandb.log(
-                            {
-                                "success rate - eval": success_rate,
-                                "avg episode reward - eval": avg_episode_reward,
-                                "avg best reward - eval": avg_best_reward,
-                                "num episode - eval": num_episode_finished,
-                            },
-                            step=self.itr,
-                            commit=False,
-                        )
+                        wandb_dict = {
+                            "eval/success rate": success_rate,
+                            "eval/avg episode reward": avg_episode_reward,
+                            "eval/avg best reward": avg_best_reward,
+                            "eval/num episode": num_episode_finished,
+                        }
+                        if self.use_intrinsic_reward:
+                            wandb_dict["eval/avg intrinsics reward"] = avg_intrinsics_reward
+                        wandb.log(wandb_dict, step=self.itr, commit=False)
                     run_results[-1]["eval_success_rate"] = success_rate
                     run_results[-1]["eval_episode_reward"] = avg_episode_reward
                     run_results[-1]["eval_best_reward"] = avg_best_reward
+                    if self.use_intrinsic_reward:
+                        run_results[-1]["eval_intrinsics_reward"] = avg_intrinsics_reward
                 else:
                     log.info(
                         f"{self.itr}: loss {loss:8.4f} | pg loss {pg_loss:8.4f} | value loss {v_loss:8.4f} | bc loss {bc_loss:8.4f} | reward {avg_episode_reward:8.4f} | eta {eta:8.4f} | t:{time:8.4f}"
@@ -451,8 +476,8 @@ class TrainPPODiffusionAgent(TrainPPOAgent):
                                 "ratio": ratio,
                                 "clipfrac": np.mean(clipfracs),
                                 "explained variance": explained_var,
-                                "avg episode reward - train": avg_episode_reward,
-                                "num episode - train": num_episode_finished,
+                                "train/avg episode reward": avg_episode_reward,
+                                "train/num episode": num_episode_finished,
                                 "diffusion - min sampling std": diffusion_min_sampling_std,
                                 "actor lr": self.actor_optimizer.param_groups[0]["lr"],
                                 "critic lr": self.critic_optimizer.param_groups[0][

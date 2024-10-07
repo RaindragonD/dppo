@@ -124,13 +124,16 @@ class RobomimicLowdimWrapper(gym.Env):
             raw_obs = self.env.reset()
         return self.get_observation(raw_obs)
 
+    def get_env_states(self):
+        return self.env.get_state()['states']
+
     def step(self, action):
-        states = self.env.get_state()['states']
         if self.normalize:
             action = self.unnormalize_action(action)
         raw_obs, reward, done, info = self.env.step(action)
         obs = self.get_observation(raw_obs)
-        info['states'] = states
+        states = self.get_env_states()
+        info['env_states'] = states
 
         # render if specified
         if self.video_writer is not None:
