@@ -155,6 +155,8 @@ class VPGDiffusion(DiffusionModel):
         deterministic=False,
     ):
         noise = self.actor(x, t, cond=cond)
+        if len(noise.shape) == 2: # NOTE: need to be fixed
+            noise = noise.view(x.shape)
         if self.use_ddim:
             ft_indices = torch.where(
                 index >= (self.ddim_steps - self.ft_denoising_steps)
@@ -169,6 +171,8 @@ class VPGDiffusion(DiffusionModel):
         if len(ft_indices) > 0:
             cond_ft = {key: cond[key][ft_indices] for key in cond}
             noise_ft = actor(x[ft_indices], t[ft_indices], cond=cond_ft)
+            if len(noise_ft.shape) == 2: # NOTE: need to be fixed
+                noise_ft = noise_ft.view(x[ft_indices].shape)
             noise[ft_indices] = noise_ft
 
         # Predict x_0
