@@ -11,39 +11,14 @@ import torch
 import logging
 import wandb
 import math
-import hydra
 
 log = logging.getLogger(__name__)
 from util.timer import Timer
 from agent.finetune.train_ppo_agent import TrainPPOAgent
 from util.scheduler import CosineAnnealingWarmupRestarts
 
-def process_reward_trajs(reward_trajs, episodes_start_end):
-    reward_trajs_split = [
-        reward_trajs[start : end + 1, env_ind]
-        for env_ind, start, end in episodes_start_end
-    ]
-    num_episode_finished = len(reward_trajs_split)
-    episode_reward = np.array(
-        [np.sum(reward_traj) for reward_traj in reward_trajs_split]
-    )
-    episode_best_reward = episode_reward # NOTE: using robomimic only now, sparse reward, reset upon finish
-    # if (
-    #     self.furniture_sparse_reward
-    # ):  # only for furniture tasks, where reward only occurs in one env step
-    #     episode_best_reward = episode_reward
-    # else:
-    #     episode_best_reward = np.array(
-    #         [
-    #             np.max(reward_traj) / self.act_steps
-    #             for reward_traj in reward_trajs_split
-    #         ]
-    #     )
-    avg_episode_reward = np.mean(episode_reward)
-    avg_best_reward = np.mean(episode_best_reward)
-    return episode_reward, avg_episode_reward, avg_best_reward, num_episode_finished
 
-class TrainPPODiffusionAgentWithDynamics(TrainPPOAgent):
+class TrainPPODiffusionAgent(TrainPPOAgent):
 
     def __init__(self, cfg):
         super().__init__(cfg)
@@ -75,9 +50,6 @@ class TrainPPODiffusionAgentWithDynamics(TrainPPOAgent):
         else:
             self.use_intrinsic_reward = False
 
-        self.dynamics_model = self.model = hydra.utils.instantiate(cfg.model)
-        self.dynamics_dataset = hydra.utils.instantiate(cfg.dynamics_dataset)
-        
     def run(self):
 
         # Start training loop
@@ -195,13 +167,37 @@ class TrainPPODiffusionAgentWithDynamics(TrainPPOAgent):
                     end = env_steps[i + 1]
                     if end - start > 1:
                         episodes_start_end.append((env_ind, start, end - 1))
+            def process_reward_trajs(reward_trajs):
+                reward_trajs_split = [
+                    reward_trajs[start : end + 1, env_ind]
+                    for env_ind, start, end in episodes_start_end
+                ]
+                num_episode_finished = len(reward_trajs_split)
+                episode_reward = np.array(
+                    [np.sum(reward_traj) for reward_traj in reward_trajs_split]
+                )
+                episode_best_reward = episode_reward # NOTE: using robomimic only now, sparse reward, reset upon finish
+                # if (
+                #     self.furniture_sparse_reward
+                # ):  # only for furniture tasks, where reward only occurs in one env step
+                #     episode_best_reward = episode_reward
+                # else:
+                #     episode_best_reward = np.array(
+                #         [
+                #             np.max(reward_traj) / self.act_steps
+                #             for reward_traj in reward_trajs_split
+                #         ]
+                #     )
+                avg_episode_reward = np.mean(episode_reward)
+                avg_best_reward = np.mean(episode_best_reward)
+                return episode_reward, avg_episode_reward, avg_best_reward, num_episode_finished
 
             if len(episodes_start_end) > 0:
                 if self.use_intrinsic_reward:
-                    episode_best_reward, avg_episode_reward, avg_best_reward, num_episode_finished = process_reward_trajs(env_reward_trajs, episodes_start_end)
-                    _, avg_intrinsics_reward, _, _ = process_reward_trajs(intrinsics_reward_trajs, episodes_start_end)
+                    episode_best_reward, avg_episode_reward, avg_best_reward, num_episode_finished = process_reward_trajs(env_reward_trajs)
+                    _, avg_intrinsics_reward, _, _ = process_reward_trajs(intrinsics_reward_trajs)
                 else:
-                    episode_best_reward, avg_episode_reward, avg_best_reward, num_episode_finished = process_reward_trajs(reward_trajs, episodes_start_end)
+                    episode_best_reward, avg_episode_reward, avg_best_reward, num_episode_finished = process_reward_trajs(reward_trajs)
                 success_rate = np.mean(
                     episode_best_reward >= self.best_reward_threshold_for_success
                 )

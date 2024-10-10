@@ -62,6 +62,7 @@ class StitchedSequenceDataset(torch.utils.data.Dataset):
             raise ValueError(f"Unsupported file format: {dataset_path}")
         traj_lengths = dataset["traj_lengths"][:max_n_episodes]  # 1-D array
         total_num_steps = np.sum(traj_lengths)
+        self.traj_lengths = traj_lengths
 
         # Set up indices for sampling
         self.indices = self.make_indices(traj_lengths, horizon_steps)
@@ -83,10 +84,7 @@ class StitchedSequenceDataset(torch.utils.data.Dataset):
             )  # (total_num_steps, C, H, W)
             log.info(f"Images shape/type: {self.images.shape, self.images.dtype}")
 
-    def __getitem__(self, idx):
-        """
-        repeat states/images if using history observation at the beginning of the episode
-        """
+    def get_actions_states(self, idx):
         start, num_before_start = self.indices[idx]
         end = start + self.horizon_steps
         states = self.states[(start - num_before_start) : end]
@@ -107,12 +105,18 @@ class StitchedSequenceDataset(torch.utils.data.Dataset):
                 ]
             )
             conditions["rgb"] = images
+        
+        end_state = self.states[end]
+        return actions, conditions, end_state
+    
+    def __getitem__(self, idx):
+        """
+        repeat states/images if using history observation at the beginning of the episode
+        """
+        actions, conditions, end_state = self.get_actions_states(idx)
 
         actions_flattened = actions.view(-1)
         if self.predict_state:
-            # NOTE: need to guard against end of trajectory, now quick fix
-            end = min(end, len(self.states)-1)
-            end_state = self.states[end]
             actions_state = torch.cat([actions_flattened, end_state], dim=-1)
             batch = Batch(actions_state, conditions)
         else:
@@ -127,7 +131,7 @@ class StitchedSequenceDataset(torch.utils.data.Dataset):
         indices = []
         cur_traj_index = 0
         for traj_length in traj_lengths:
-            max_start = cur_traj_index + traj_length - horizon_steps + 1
+            max_start = cur_traj_index + traj_length - horizon_steps #  NOTE: keep last observation, but then last action is not used
             indices += [
                 (i, i - cur_traj_index) for i in range(cur_traj_index, max_start)
             ]
@@ -146,6 +150,68 @@ class StitchedSequenceDataset(torch.utils.data.Dataset):
 
     def __len__(self):
         return len(self.indices)
+
+Batch_Dynamics = namedtuple("Batch_Dynamics", "states actions end_state")
+
+class DynamicsDataset(StitchedSequenceDataset):
+    
+    def __getitem__(self, idx):
+        """
+        repeat states/images if using history observation at the beginning of the episode
+        """
+        actions, conditions, end_state = self.get_actions_states(idx)
+        batch = Batch_Dynamics(conditions["state"],actions, end_state)
+        return batch
+
+class DynamicsDatasetOnline(DynamicsDataset):
+    
+    def __init__(
+        self,
+        dataset_path,
+        horizon_steps=64,
+        cond_steps=1,
+        img_cond_steps=1,
+        max_n_episodes=10000,
+        use_img=False,
+        predict_state=False,
+        device="cuda:0",
+        normalization_path=None,
+    ):
+        super().__init__(dataset_path, horizon_steps, cond_steps, img_cond_steps, max_n_episodes, use_img, predict_state, device)
+        self.normalize_obs = False
+        if normalization_path is not None:
+            self.normalization_data = np.load(normalization_path)
+            self.normalize_obs = True
+    
+    def normalize_data(self, states, actions):
+
+        obs_min = self.normalization_data['obs_min']
+        obs_max = self.normalization_data['obs_max']
+        action_min = self.normalization_data['action_min']
+        action_max = self.normalization_data['action_max']
+        
+        states = (states - obs_min) / (obs_max - obs_min)
+        actions = (actions - action_min) / (action_max - action_min)
+        
+        return states, actions
+    
+    def add_trajectory(self, states, actions):
+        assert states.shape[0] == actions.shape[0], f"states and actions must have the same length, found {states.shape[0]} and {actions.shape[0]}"
+        if self.normalize_obs:
+            states, actions = self.normalize_data(states, actions)
+        states = torch.from_numpy(states).to(self.device)
+        actions = torch.from_numpy(actions).to(self.device)
+        
+        cur_traj_index = len(self.states)
+        traj_length = states.shape[0]
+        max_start = cur_traj_index + traj_length - self.horizon_steps #  NOTE: keep last observation, but then last action is not used
+        self.indices += [
+            (i, i - cur_traj_index) for i in range(cur_traj_index, max_start)
+        ]
+        
+        self.states = torch.cat((self.states, states), dim=0)
+        self.actions = torch.cat((self.actions, actions), dim=0)
+        self.traj_lengths = np.concatenate((self.traj_lengths, [traj_length]))
 
 class CriticDataset(torch.utils.data.Dataset):
 
