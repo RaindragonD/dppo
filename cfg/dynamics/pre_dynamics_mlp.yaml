@@ -1,0 +1,62 @@
+defaults:
+  - _self_
+hydra:
+  run:
+    dir: ${logdir}
+_target_: agent.dynamics.train_dynamics_agent.TrainDynamicsAgent
+
+name: ${env_name}_pre_dynamics_mlp
+logdir: ${oc.env:DPPO_LOG_DIR}/dynamics/${name}/${now:%Y-%m-%d}_${now:%H-%M-%S}_${seed}
+train_dataset_path: ${oc.env:DPPO_DATA_DIR}/robomimic/${env_name}-ph/train.npz
+normalization_path: ${oc.env:DPPO_DATA_DIR}/robomimic/${env_name}-ph/normalization.npz
+
+seed: 42
+device: cuda:0
+env_name: square
+obs_dim: 23
+action_dim: 7
+transition_dim: ${action_dim}
+horizon_steps: 8
+act_steps: 8
+cond_steps: 2
+n_steps: 300
+render_num: 0
+predict_state: False
+
+wandb:
+  entity: ${oc.env:DPPO_WANDB_ENTITY}
+  project: robomimic-dynamics
+  run: ${now:%H-%M-%S}_${name}
+
+train:
+  n_epochs: 8000
+  batch_size: 256
+  learning_rate: 1e-4
+  weight_decay: 1e-6
+  lr_scheduler:
+    first_cycle_steps: 10000
+    warmup_steps: 100
+    min_lr: 1e-5
+  epoch_start_ema: 20
+  update_ema_freq: 10
+  save_model_freq: 1000
+
+model:
+  _target_: model.dynamics.dynamics_mlp.DynamicsMLP
+  mlp_dims: [1024, 1024, 1024]
+  residual_style: True
+  horizon_steps: ${horizon_steps}
+  cond_steps: ${cond_steps}
+  obs_dim: ${obs_dim}
+  action_dim: ${action_dim}
+  device: ${device}
+
+ema:
+  decay: 0.995
+
+train_dataset:
+  _target_: agent.dataset.sequence.DynamicsDataset
+  dataset_path: ${train_dataset_path}
+  horizon_steps: ${horizon_steps}
+  cond_steps: ${cond_steps}
+  device: ${device}
