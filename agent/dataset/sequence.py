@@ -14,7 +14,7 @@ import random
 
 log = logging.getLogger(__name__)
 
-Batch = namedtuple("Batch", "actions conditions")
+Batch = namedtuple("Batch", "target cond")
 
 
 class StitchedSequenceDataset(torch.utils.data.Dataset):
@@ -160,7 +160,18 @@ class DynamicsDataset(StitchedSequenceDataset):
         repeat states/images if using history observation at the beginning of the episode
         """
         actions, conditions, end_state = self.get_actions_states(idx)
-        batch = Batch_Dynamics(conditions["state"],actions, end_state)
+        cond = torch.cat([conditions["state"].view(-1), actions.view(-1)], dim=0)
+        batch = Batch(end_state, cond)
+        return batch
+class InverseDynamicsDataset(StitchedSequenceDataset):
+    
+    def __getitem__(self, idx):
+        """
+        repeat states/images if using history observation at the beginning of the episode
+        """
+        actions, conditions, end_state = self.get_actions_states(idx)
+        cond = torch.cat([conditions["state"].view(-1), end_state.view(-1)], dim=0)
+        batch = Batch(actions.view(-1), cond)
         return batch
 
 class DynamicsDatasetOnline(DynamicsDataset):

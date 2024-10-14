@@ -147,7 +147,7 @@ class EvalDiffusionAgent(EvalAgent):
             # Apply multi-step action
             obs_venv, reward_venv, done_venv, info_venv = self.venv.step(action_venv)
             if step == 0:
-                sim_states = np.array([info["states"] for info in info_venv])
+                sim_states = np.array([info["env_states"] for info in info_venv])
             reward_trajs = np.vstack((reward_trajs, reward_venv[None]))
             firsts_trajs[step + 1] = done_venv
             prev_obs_venv = obs_venv
