@@ -99,14 +99,23 @@ class EvalDiffusionAgent(EvalAgent):
     def decode_predictions(self, x):
         action_dim = self.cfg.action_dim
         horizon_steps = self.cfg.horizon_steps
-        B = x.shape[0]
-        if self.cfg.predict_state:
+        obs_dim = self.cfg.obs_dim
+        B, L = x.shape
+        if L == horizon_steps * action_dim + obs_dim:
             states = x[:, action_dim * horizon_steps:]
             actions = x[:, :action_dim * horizon_steps].reshape(B, horizon_steps, action_dim)
+            # if self.cfg.normalization_path is not None:
+            #     normalization = np.load(self.cfg.normalization_path)
+            #     obs_min = normalization["obs_min"]
+            #     obs_max = normalization["obs_max"]
+            #     states = (states + 1) / 2  # [-1, 1] -> [0, 1]
+            #     states = states * (obs_max - obs_min) + obs_min
             return actions, states
-        else:
+        elif L == horizon_steps * action_dim:
             actions = x.reshape(B, horizon_steps, action_dim)
             return actions, None
+        else:
+            raise ValueError(f"Invalid input length: {L}")
         
     def run(self):
 
@@ -147,7 +156,7 @@ class EvalDiffusionAgent(EvalAgent):
             # Apply multi-step action
             obs_venv, reward_venv, done_venv, info_venv = self.venv.step(action_venv)
             if step == 0:
-                sim_states = np.array([info["states"] for info in info_venv])
+                sim_states = np.array([info["env_states"] for info in info_venv])
             reward_trajs = np.vstack((reward_trajs, reward_venv[None]))
             firsts_trajs[step + 1] = done_venv
             prev_obs_venv = obs_venv
