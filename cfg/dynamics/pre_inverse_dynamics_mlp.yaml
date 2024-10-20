@@ -5,7 +5,7 @@ hydra:
     dir: ${logdir}
 _target_: agent.dynamics.train_dynamics_agent.TrainDynamicsAgent
 
-name: ${env_name}_pre_dynamics_mlp
+name: ${env_name}_pre_inverse_dynamics_mlp
 logdir: ${oc.env:DPPO_LOG_DIR}/dynamics/${name}/${now:%Y-%m-%d}_${now:%H-%M-%S}_${seed}
 train_dataset_path: ${oc.env:DPPO_DATA_DIR}/robomimic/${env_name}-ph/train.npz
 normalization_path: ${oc.env:DPPO_DATA_DIR}/robomimic/${env_name}-ph/normalization.npz
@@ -45,8 +45,8 @@ model:
   _target_: model.dynamics.diffusion.DiffusionModel
   predict_epsilon: True
   denoised_clip_value: 1.0
-  diffusion_dim: ${obs_dim}
-  cond_dim: ${eval:'${obs_dim} * ${cond_steps} + ${action_dim} * ${horizon_steps}'}
+  diffusion_dim: ${eval:'${action_dim} * ${horizon_steps}'}
+  cond_dim: ${eval:'${obs_dim} * ${cond_steps} + ${obs_dim}'}
   denoising_steps: ${denoising_steps}
   device: ${device}
   network:
@@ -62,7 +62,7 @@ ema:
   decay: 0.995
 
 train_dataset:
-  _target_: agent.dataset.sequence.DynamicsDataset
+  _target_: agent.dataset.sequence.InverseDynamicsDataset
   dataset_path: ${train_dataset_path}
   horizon_steps: ${horizon_steps}
   cond_steps: ${cond_steps}

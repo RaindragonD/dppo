@@ -67,6 +67,7 @@ model:
   predict_epsilon: True
   predict_state: ${predict_state}
   denoised_clip_value: 1.0
+  network_path: /home/yl/dppo/log/robomimic-pretrain/square_pre_diffusion_state_mlp_ta8_td20/2024-10-13_22-48-05_42/checkpoint/state_7000.pt
   network:
     _target_: model.diffusion.mlp_diffusion.DiffusionMLP
     time_dim: 32
