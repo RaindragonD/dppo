@@ -5,8 +5,8 @@ hydra:
     dir: ${logdir}
 _target_: agent.pretrain.train_diffusion_agent.TrainDiffusionAgent
 
-name: ${env_name}_pre_diffusion_mlp_ta${horizon_steps}_td${denoising_steps}
-logdir: ${oc.env:DPPO_LOG_DIR}/robomimic-pretrain/${name}/${now:%Y-%m-%d}_${now:%H-%M-%S}_${seed}
+name: ${env_name}_policy
+logdir: ${oc.env:DPPO_LOG_DIR}/${name}/${now:%Y-%m-%d}_${now:%H-%M-%S}_${seed}
 train_dataset_path: ${oc.env:DPPO_DATA_DIR}/robomimic/${env_name}-ph/train.npz
 normalization_path: ${oc.env:DPPO_DATA_DIR}/robomimic/${env_name}-ph/normalization.npz
 robomimic_env_cfg_path: cfg/robomimic/env_meta/${env_name}.json
@@ -27,7 +27,7 @@ predict_state: False
 
 wandb:
   entity: ${oc.env:DPPO_WANDB_ENTITY}
-  project: robomimic-${env_name}-pretrain
+  project: dynamics
   run: ${now:%H-%M-%S}_${name}
 
 env:
@@ -61,6 +61,7 @@ train:
   epoch_start_ema: 20
   update_ema_freq: 10
   save_model_freq: 1000
+  train_split: 0.95
 
 model:
   _target_: model.diffusion.diffusion.DiffusionModel
@@ -89,6 +90,7 @@ ema:
 
 train_dataset:
   _target_: agent.dataset.sequence.StitchedSequenceDataset
+  predict_state: ${predict_state}
   dataset_path: ${train_dataset_path}
   horizon_steps: ${horizon_steps}
   cond_steps: ${cond_steps}

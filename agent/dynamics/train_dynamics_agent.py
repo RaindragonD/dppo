@@ -10,7 +10,7 @@ import numpy as np
 log = logging.getLogger(__name__)
 from util.timer import Timer
 from agent.pretrain.train_agent import PreTrainAgent, batch_to_device
-from agent.eval.eval_diffusion_agent import EvalDiffusionAgent
+from agent.eval.eval_inverse_dynamics_agent import EvalInverseDynamicsAgent
 
 import torch
 
@@ -18,9 +18,13 @@ class TrainDynamicsAgent(PreTrainAgent):
 
     def __init__(self, cfg):
         super().__init__(cfg)
-        # self.sample_freq = cfg.train.get("sample_freq", 10)
-        # self.eval_freq = cfg.train.get("eval_freq", 50)
+        self.sample_freq = cfg.train.get("sample_freq", 10)
+        self.eval_freq = cfg.train.get("eval_freq", 50)
         
+        # build eval agent
+        self.eval_agent = EvalInverseDynamicsAgent(cfg, load_model=False)
+        self.eval_agent.model = self.model
+
     def run(self):
 
         timer = Timer()
@@ -49,7 +53,7 @@ class TrainDynamicsAgent(PreTrainAgent):
                 for batch_val in self.dataloader_val:
                     if self.dataset_val.device == "cpu":
                         batch_val = batch_to_device(batch_val)
-                    loss_val, infos_val = self.model.loss(*batch_val)
+                    loss_val = self.model.loss(*batch_val)
                     loss_val_epoch.append(loss_val.item())
                 self.model.train()
             loss_val = np.mean(loss_val_epoch) if len(loss_val_epoch) > 0 else None
@@ -76,6 +80,13 @@ class TrainDynamicsAgent(PreTrainAgent):
                             {"loss - val": loss_val}, step=self.epoch, commit=False
                         )
                     wandb.log({"loss - train": loss_train}, step=self.epoch)
-                    
+            
+            # eval
+            if self.epoch % self.eval_freq == 0:
+                self.model.eval()
+                success_rate = self.eval_agent.run()
+                wandb.log({"eval - success rate": success_rate,}, step=self.epoch)
+                self.model.train()
+                
             # count
             self.epoch += 1

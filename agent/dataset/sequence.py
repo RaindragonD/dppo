@@ -144,9 +144,12 @@ class StitchedSequenceDataset(torch.utils.data.Dataset):
         """
         num_train = int(len(self.indices) * train_split)
         train_indices = random.sample(self.indices, num_train)
-        val_indices = [i for i in range(len(self.indices)) if i not in train_indices]
+        val_indices = [self.indices[i] for i in range(len(self.indices)) if i not in train_indices]
         self.indices = train_indices
         return val_indices
+
+    def set_indices(self, indices):
+        self.indices = indices
 
     def __len__(self):
         return len(self.indices)

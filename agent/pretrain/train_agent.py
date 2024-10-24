@@ -86,7 +86,7 @@ class PreTrainAgent:
         self.batch_size = cfg.train.batch_size
         self.update_ema_freq = cfg.train.update_ema_freq
         self.epoch_start_ema = cfg.train.epoch_start_ema
-        self.val_freq = cfg.train.get("val_freq", 100)
+        self.val_freq = cfg.train.get("val_freq", 1)
 
         # Logging, checkpoints
         self.logdir = cfg.logdir

@@ -5,10 +5,11 @@ hydra:
     dir: ${logdir}
 _target_: agent.dynamics.train_dynamics_agent.TrainDynamicsAgent
 
-name: ${env_name}_pre_inverse_dynamics_mlp
-logdir: ${oc.env:DPPO_LOG_DIR}/dynamics/${name}/${now:%Y-%m-%d}_${now:%H-%M-%S}_${seed}
+name: ${env_name}_inverse_dynamics
+logdir: ${oc.env:DPPO_LOG_DIR}/${name}/${now:%Y-%m-%d}_${now:%H-%M-%S}_${seed}
 train_dataset_path: ${oc.env:DPPO_DATA_DIR}/robomimic/${env_name}-ph/train.npz
 normalization_path: ${oc.env:DPPO_DATA_DIR}/robomimic/${env_name}-ph/normalization.npz
+robomimic_env_cfg_path: cfg/robomimic/env_meta/${env_name}.json
 
 seed: 42
 device: cuda:0
@@ -28,6 +29,25 @@ wandb:
   project: dynamics
   run: ${now:%H-%M-%S}_${name}
 
+env:
+  n_envs: 10
+  name: ${env_name}
+  best_reward_threshold_for_success: 1
+  max_episode_steps: ${n_steps}
+  save_video: False
+  wrappers:
+    robomimic_lowdim:
+      normalization_path: ${normalization_path}
+      low_dim_keys: ['robot0_eef_pos',
+                    'robot0_eef_quat',
+                    'robot0_gripper_qpos',
+                    'object'] # same order of preprocessed observations
+    multi_step:
+      n_obs_steps: ${cond_steps}
+      n_action_steps: ${act_steps}
+      max_episode_steps: ${env.max_episode_steps}
+      reset_within_step: False
+
 train:
   n_epochs: 8000
   batch_size: 256
@@ -40,6 +60,7 @@ train:
   epoch_start_ema: 20
   update_ema_freq: 10
   save_model_freq: 1000
+  train_split: 0.95
 
 model:
   _target_: model.dynamics.diffusion.DiffusionModel
