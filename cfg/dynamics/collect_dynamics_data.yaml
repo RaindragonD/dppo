@@ -1,0 +1,44 @@
+defaults:
+  - _self_
+hydra:
+  run:
+    dir: ${logdir}
+_target_: agent.dynamics.generate_dynamics_data.GenerateDynamicsDataAgent
+
+name: collect_dynamics_data
+logdir: ${oc.env:DPPO_LOG_DIR}/${name}/${now:%Y-%m-%d}_${now:%H-%M-%S}_${seed}
+robomimic_env_cfg_path: cfg/robomimic/env_meta/${env_name}.json
+normalization_path: ${oc.env:DPPO_DATA_DIR}/robomimic/${env_name}-ph/normalization.npz
+
+seed: 42
+device: cuda:0
+env_name: square
+obs_dim: 23
+action_dim: 7
+transition_dim: ${action_dim}
+denoising_steps: 20
+cond_steps: 2
+horizon_steps: 8
+act_steps: 8
+
+n_steps: 38  # each episode takes max_episode_steps / act_steps steps
+render_num: 40
+predict_state: True
+
+env:
+  n_envs: 10
+  name: ${env_name}
+  best_reward_threshold_for_success: 1
+  max_episode_steps: 300
+  wrappers:
+    robomimic_lowdim:
+      normalization_path: ${normalization_path}
+      low_dim_keys: ['robot0_eef_pos',
+                    'robot0_eef_quat',
+                    'robot0_gripper_qpos',
+                    'object'] # same order of preprocessed observations
+    multi_step:
+      n_obs_steps: ${cond_steps}
+      n_action_steps: ${act_steps}
+      max_episode_steps: ${env.max_episode_steps}
+      reset_within_step: False
